@@ -1,0 +1,8 @@
+version: 1
+bundleID: com.luanquaresma.qemu-ios-ubuntu
+product: QemuIOSUbuntu
+infoPath: Config/Info.plist
+# Para conta Apple Developer gratuita, use Config/QemuIOSUbuntu-Free.entitlements
+# Para conta Apple Developer paga (com suporte a increased-memory-limit), use Config/QemuIOSUbuntu.entitlements
+entitlementsPath: Config/QemuIOSUbuntu-Free.entitlements
+
