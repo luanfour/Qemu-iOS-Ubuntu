@@ -9,39 +9,44 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install xtool
-        run: brew install xtool-org/tap/xtool
-      - name: Build iOS App
+      - name: Build iOS Binary
         run: |
-          if [ -f "swift/UbuntuQEMU/xtool.yml" ]; then
-            cd swift/UbuntuQEMU
-          fi
-          # Configura o SDK do iOS a partir do Xcode instalado no runner macOS
-          XCODE_PATH=$(xcode-select -p)
-          xtool setup --xcode "$XCODE_PATH" || true
-          xtool build --help
-          # Tenta gerar o .app via xtool (sem assinatura) ou via swift build com sysroot iphoneos
-          xtool build --no-sign || xtool build || {
-            IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-            swift build -c release \
-              --triple arm64-apple-ios17.0 \
-              --sdk "$IOS_SDK" \
-              -Xcc -isysroot -Xcc "$IOS_SDK" \
-              -Xswiftc -sdk -Xswiftc "$IOS_SDK" \
-              -Xswiftc -target -Xswiftc arm64-apple-ios17.0
-          }
-          mkdir -p "$GITHUB_WORKSPACE/build/Payload"
-          find . -name "*.app" -maxdepth 5 -exec cp -R {} "$GITHUB_WORKSPACE/build/Payload/" \;
+          IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          swift build -c release \
+            --triple arm64-apple-ios17.0 \
+            --sdk "$IOS_SDK" \
+            -Xcc -isysroot -Xcc "$IOS_SDK" \
+            -Xswiftc -sdk -Xswiftc "$IOS_SDK" \
+            -Xswiftc -target -Xswiftc arm64-apple-ios17.0
       - name: Package IPA
         run: |
-          cd "$GITHUB_WORKSPACE/build"
-          if ls Payload/*.app 1> /dev/null 2>&1; then
-            zip -r ../Qemu-iOS-Ubuntu.ipa Payload
-          else
-            echo "Nenhum bundle .app encontrado. Arquivos gerados:"
-            find "$GITHUB_WORKSPACE" -maxdepth 5
+          APP_DIR="$GITHUB_WORKSPACE/build/Payload/QemuIOSUbuntu.app"
+          mkdir -p "$APP_DIR"
+
+          # Copia o executável compilado
+          BIN_PATH=$(find .build/arm64-apple-ios/release -maxdepth 1 -type f -perm +111 | head -n 1)
+          if [ -z "$BIN_PATH" ]; then
+            echo "Executável não encontrado em .build/arm64-apple-ios/release"
+            ls -la .build/arm64-apple-ios/release
             exit 1
           fi
+          BIN_NAME=$(basename "$BIN_PATH")
+          cp "$BIN_PATH" "$APP_DIR/$BIN_NAME"
+          chmod +x "$APP_DIR/$BIN_NAME"
+
+          # Copia o Info.plist do repositório e garante os campos obrigatórios
+          cp Config/Info.plist "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $BIN_NAME" "$APP_DIR/Info.plist" || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $BIN_NAME" "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP_DIR/Info.plist" || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP_DIR/Info.plist"
+
+          # Copia resource bundles gerados pelo SwiftPM (se houver)
+          find .build/arm64-apple-ios/release -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP_DIR/" \;
+
+          # Empacota o .ipa
+          cd "$GITHUB_WORKSPACE/build"
+          zip -r ../Qemu-iOS-Ubuntu.ipa Payload
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
