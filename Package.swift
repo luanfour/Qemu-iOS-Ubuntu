@@ -7,7 +7,7 @@ let package = Package(
     name: "QemuIOSUbuntu",
     defaultLocalization: "pt-BR",
     platforms: [
-        .iOS(.v16)
+        .iOS(.v17)
     ],
     products: [
         // Produto de biblioteca principal consumido pelo xtool para gerar o .app iOS
