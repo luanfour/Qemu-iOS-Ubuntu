@@ -16,17 +16,30 @@ jobs:
           if [ -f "swift/UbuntuQEMU/xtool.yml" ]; then
             cd swift/UbuntuQEMU
           fi
-          xtool build -c release || swift build -c release --triple arm64-apple-ios
+          # Configura o SDK do iOS a partir do Xcode instalado no runner macOS
+          XCODE_PATH=$(xcode-select -p)
+          xtool setup --xcode "$XCODE_PATH" || true
+          xtool build --help
+          # Tenta gerar o .app via xtool (sem assinatura) ou via swift build com sysroot iphoneos
+          xtool build --no-sign || xtool build || {
+            IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+            swift build -c release \
+              --triple arm64-apple-ios17.0 \
+              --sdk "$IOS_SDK" \
+              -Xcc -isysroot -Xcc "$IOS_SDK" \
+              -Xswiftc -sdk -Xswiftc "$IOS_SDK" \
+              -Xswiftc -target -Xswiftc arm64-apple-ios17.0
+          }
           mkdir -p "$GITHUB_WORKSPACE/build/Payload"
-          find . -name "*.app" -maxdepth 4 -exec cp -R {} "$GITHUB_WORKSPACE/build/Payload/" \;
+          find . -name "*.app" -maxdepth 5 -exec cp -R {} "$GITHUB_WORKSPACE/build/Payload/" \;
       - name: Package IPA
         run: |
           cd "$GITHUB_WORKSPACE/build"
           if ls Payload/*.app 1> /dev/null 2>&1; then
             zip -r ../Qemu-iOS-Ubuntu.ipa Payload
           else
-            echo "Nenhum bundle .app encontrado em Payload"
-            find "$GITHUB_WORKSPACE" -maxdepth 4
+            echo "Nenhum bundle .app encontrado. Arquivos gerados:"
+            find "$GITHUB_WORKSPACE" -maxdepth 5
             exit 1
           fi
       - name: Upload IPA Artifact
