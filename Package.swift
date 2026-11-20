@@ -11,7 +11,7 @@ let package = Package(
     ],
     products: [
         // Produto de biblioteca principal consumido pelo xtool para gerar o .app iOS
-        .library(
+        .executable(
             name: "QemuIOSUbuntu",
             targets: ["QemuIOSUbuntu"]
         )
@@ -34,7 +34,7 @@ let package = Package(
             ]
         ),
         // Aplicação principal em SwiftUI
-        .target(
+        .executableTarget(
             name: "QemuIOSUbuntu",
             dependencies: [
                 "QEMUBridge",

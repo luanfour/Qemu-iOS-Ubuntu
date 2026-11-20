@@ -13,6 +13,7 @@ jobs:
         run: |
           IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
           swift build -c release \
+            --product QemuIOSUbuntu \
             --triple arm64-apple-ios17.0 \
             --sdk "$IOS_SDK" \
             -Xcc -isysroot -Xcc "$IOS_SDK" \
@@ -23,28 +24,23 @@ jobs:
           APP_DIR="$GITHUB_WORKSPACE/build/Payload/QemuIOSUbuntu.app"
           mkdir -p "$APP_DIR"
 
-          # Copia o executável compilado
-          BIN_PATH=$(find .build/arm64-apple-ios/release -maxdepth 1 -type f -perm +111 | head -n 1)
-          if [ -z "$BIN_PATH" ]; then
-            echo "Executável não encontrado em .build/arm64-apple-ios/release"
+          BIN_PATH=".build/arm64-apple-ios/release/QemuIOSUbuntu"
+          if [ ! -f "$BIN_PATH" ]; then
+            echo "Binário não encontrado em $BIN_PATH"
             ls -la .build/arm64-apple-ios/release
             exit 1
           fi
-          BIN_NAME=$(basename "$BIN_PATH")
-          cp "$BIN_PATH" "$APP_DIR/$BIN_NAME"
-          chmod +x "$APP_DIR/$BIN_NAME"
+          cp "$BIN_PATH" "$APP_DIR/QemuIOSUbuntu"
+          chmod +x "$APP_DIR/QemuIOSUbuntu"
 
-          # Copia o Info.plist do repositório e garante os campos obrigatórios
           cp Config/Info.plist "$APP_DIR/Info.plist"
-          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable $BIN_NAME" "$APP_DIR/Info.plist" || \
-            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string $BIN_NAME" "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable QemuIOSUbuntu" "$APP_DIR/Info.plist" || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string QemuIOSUbuntu" "$APP_DIR/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP_DIR/Info.plist" || \
             /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP_DIR/Info.plist"
 
-          # Copia resource bundles gerados pelo SwiftPM (se houver)
           find .build/arm64-apple-ios/release -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP_DIR/" \;
 
-          # Empacota o .ipa
           cd "$GITHUB_WORKSPACE/build"
           zip -r ../Qemu-iOS-Ubuntu.ipa Payload
       - name: Upload IPA Artifact
