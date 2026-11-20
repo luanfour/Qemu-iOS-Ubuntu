@@ -9,37 +9,41 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build iOS Binary
+      - name: Build iOS Binary with xcodebuild
         run: |
-          IOS_SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          swift build -c release \
-            --product QemuIOSUbuntu \
-            --triple arm64-apple-ios17.0 \
-            --sdk "$IOS_SDK" \
-            -Xcc -isysroot -Xcc "$IOS_SDK" \
-            -Xswiftc -sdk -Xswiftc "$IOS_SDK" \
-            -Xswiftc -target -Xswiftc arm64-apple-ios17.0
+          xcodebuild build \
+            -scheme QemuIOSUbuntu \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            -derivedDataPath "$GITHUB_WORKSPACE/DerivedData" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
       - name: Package IPA
         run: |
           APP_DIR="$GITHUB_WORKSPACE/build/Payload/QemuIOSUbuntu.app"
           mkdir -p "$APP_DIR"
 
-          BIN_PATH=".build/arm64-apple-ios/release/QemuIOSUbuntu"
-          if [ ! -f "$BIN_PATH" ]; then
-            echo "Binário não encontrado em $BIN_PATH"
-            ls -la .build/arm64-apple-ios/release
+          # Localiza o executável Mach-O arm64 gerado pelo xcodebuild
+          BIN_PATH=$(find "$GITHUB_WORKSPACE/DerivedData" -type f -name "QemuIOSUbuntu" -perm +111 | grep -v "\.dSYM" | head -n 1)
+          if [ -z "$BIN_PATH" ]; then
+            echo "Executável não encontrado no DerivedData:"
+            find "$GITHUB_WORKSPACE/DerivedData/Build/Products" -maxdepth 4
             exit 1
           fi
+
           cp "$BIN_PATH" "$APP_DIR/QemuIOSUbuntu"
           chmod +x "$APP_DIR/QemuIOSUbuntu"
 
+          # Copia Info.plist e garante os metadados obrigatórios do bundle iOS
           cp Config/Info.plist "$APP_DIR/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable QemuIOSUbuntu" "$APP_DIR/Info.plist" || \
             /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string QemuIOSUbuntu" "$APP_DIR/Info.plist"
           /usr/libexec/PlistBuddy -c "Set :CFBundlePackageType APPL" "$APP_DIR/Info.plist" || \
             /usr/libexec/PlistBuddy -c "Add :CFBundlePackageType string APPL" "$APP_DIR/Info.plist"
 
-          find .build/arm64-apple-ios/release -maxdepth 1 -name "*.bundle" -exec cp -R {} "$APP_DIR/" \;
+          # Copia resource bundles gerados (se houver)
+          find "$GITHUB_WORKSPACE/DerivedData/Build/Products" -name "*.bundle" -exec cp -R {} "$APP_DIR/" \; 2>/dev/null || true
 
           cd "$GITHUB_WORKSPACE/build"
           zip -r ../Qemu-iOS-Ubuntu.ipa Payload
