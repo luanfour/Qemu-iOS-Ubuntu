@@ -1,4 +1,4 @@
-import Citadel
+@preconcurrency import Citadel
 import CryptoKit
 import Foundation
 import NIOCore
@@ -61,7 +61,7 @@ public final class SSHSessionTab: ObservableObject, Identifiable {
         self.rows = rows
         guard let writer = stdinWriter else { return }
         Task {
-            try? await writer.changeSize(cols: cols, rows: rows)
+            try? await writer.changeSize(cols: cols, rows: rows, pixelWidth: 0, pixelHeight: 0)
         }
     }
 
